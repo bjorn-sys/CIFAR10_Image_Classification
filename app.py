@@ -7,6 +7,7 @@ import numpy as np
 import cv2
 import io
 import os
+import base64
 
 # ==============================================================
 # MODEL DEFINITION: AlexNetMiniLite (Same as training)
@@ -92,14 +93,151 @@ class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
 # ==============================================================
 def check_login(username, password):
     # Get credentials from environment variables or use defaults
-    admin_user = os.getenv('APP_USERNAME', 'naingollan')
-    admin_password = os.getenv('APP_PASSWORD', 'airpack419+')
+    admin_user = os.getenv('APP_USERNAME', 'admin')
+    admin_password = os.getenv('APP_PASSWORD', 'admin123')
     
     # Simple authentication
     valid_users = {
         admin_user: admin_password
     }
     return username in valid_users and valid_users[username] == password
+
+# ==============================================================
+# CUSTOM CAMERA COMPONENT WITH BACK CAMERA SUPPORT
+# ==============================================================
+def camera_component_with_back_camera():
+    """Custom camera component that allows back camera selection"""
+    
+    st.markdown("""
+    <style>
+    .camera-options {
+        margin-bottom: 10px;
+    }
+    .camera-instructions {
+        background-color: #f0f2f6;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Camera selection
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        camera_mode = st.radio(
+            "Camera Mode",
+            ["Front Camera", "Back Camera"],
+            help="Select which camera to use"
+        )
+    
+    with col2:
+        st.markdown(f"""
+        <div class="camera-instructions">
+        📱 <strong>Using {camera_mode}:</strong><br>
+        • For better results, ensure good lighting<br>
+        • Hold steady while capturing<br>
+        • Position object in the center
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # JavaScript to switch cameras
+    camera_constraints = {
+        "Front Camera": {"facingMode": "user"},
+        "Back Camera": {"facingMode": "environment"}
+    }
+    
+    # HTML and JavaScript for custom camera component
+    camera_html = f"""
+    <script>
+    let currentStream = null;
+    
+    async function setupCamera(facingMode) {{
+        if (currentStream) {{
+            currentStream.getTracks().forEach(track => track.stop());
+        }}
+        
+        const constraints = {{
+            video: {{ 
+                facingMode: facingMode,
+                width: {{ ideal: 1280 }},
+                height: {{ ideal: 720 }}
+            }} 
+        }};
+        
+        try {{
+            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const video = document.getElementById('video');
+            video.srcObject = currentStream;
+        }} catch (err) {{
+            console.error("Error accessing camera:", err);
+            alert("Error accessing camera: " + err.message);
+        }}
+    }}
+    
+    function capturePhoto() {{
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const dataURL = canvas.toDataURL('image/jpeg');
+        document.getElementById('photoData').value = dataURL;
+        document.getElementById('captureForm').submit();
+    }}
+    
+    // Initialize with front camera
+    setupCamera('{camera_constraints[camera_mode]["facingMode"]}');
+    
+    // Update camera when selection changes
+    document.getElementById('cameraMode').addEventListener('change', function(e) {{
+        const facingMode = e.target.value === 'Back Camera' ? 'environment' : 'user';
+        setupCamera(facingMode);
+    }});
+    </script>
+    
+    <div style="text-align: center;">
+        <video id="video" autoplay playsinline style="width: 100%; max-width: 500px; border-radius: 10px; background: #000;"></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+        
+        <div style="margin: 15px 0;">
+            <button onclick="capturePhoto()" style="
+                background: #ff4b4b;
+                color: white;
+                border: none;
+                padding: 12px 30px;
+                border-radius: 25px;
+                font-size: 16px;
+                cursor: pointer;
+                margin: 10px;
+            ">📸 Capture Image</button>
+        </div>
+    </div>
+    
+    <form id="captureForm">
+        <input type="hidden" id="photoData" name="photoData">
+        <input type="hidden" id="cameraMode" value="{camera_mode}">
+    </form>
+    """
+    
+    st.components.v1.html(camera_html, height=600)
+    
+    # Handle captured image
+    if st.session_state.get('photo_data'):
+        try:
+            # Decode base64 image
+            image_data = st.session_state.photo_data.split(',')[1]
+            image_bytes = base64.b64decode(image_data)
+            image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+            return image
+        except Exception as e:
+            st.error(f"Error processing captured image: {e}")
+            return None
+    
+    return None
 
 # ==============================================================
 # STREAMLIT APP
@@ -116,6 +254,13 @@ def main():
         st.session_state.authenticated = False
     if 'username' not in st.session_state:
         st.session_state.username = ''
+    if 'photo_data' not in st.session_state:
+        st.session_state.photo_data = None
+    
+    # Handle form submission for captured images
+    if st.query_params.get('photoData'):
+        st.session_state.photo_data = st.query_params.get('photoData')
+        st.rerun()
     
     # Login section
     if not st.session_state.authenticated:
@@ -155,6 +300,7 @@ def main():
     if st.sidebar.button("Logout"):
         st.session_state.authenticated = False
         st.session_state.username = ''
+        st.session_state.photo_data = None
         st.rerun()
     
     st.title("🖼️ CIFAR-10 Image Classification")
@@ -206,24 +352,20 @@ def main():
     
     else:  # Camera Input
         st.header("📱 Camera Input")
-        st.info("This feature works best on mobile devices with a camera")
         
-        # Camera input
-        img_file_buffer = st.camera_input(
-            "Take a picture with your camera",
-            help="Position your camera to capture an object and take a picture"
-        )
+        # Clear previous captured image if switching modes
+        if st.session_state.photo_data:
+            st.session_state.photo_data = None
         
-        if img_file_buffer is not None:
-            # Convert to PIL Image
-            bytes_data = img_file_buffer.getvalue()
-            image = Image.open(io.BytesIO(bytes_data)).convert('RGB')
-            
+        # Use custom camera component
+        captured_image = camera_component_with_back_camera()
+        
+        if captured_image is not None:
             # Display captured image
-            st.image(image, caption="Captured Image", use_column_width=True)
+            st.image(captured_image, caption="Captured Image", use_column_width=True)
             
             # Preprocess and predict
-            image_tensor = preprocess_image(image)
+            image_tensor = preprocess_image(captured_image)
             prediction, probabilities = predict_image(model, image_tensor)
             
             # Display results
@@ -246,6 +388,11 @@ def main():
             for class_name, prob in sorted_probs.items():
                 st.write(f"**{class_name}**: {prob:.2f}%")
                 st.progress(float(prob) / 100)
+            
+            # Option to capture another image
+            if st.button("🔄 Capture Another Image"):
+                st.session_state.photo_data = None
+                st.rerun()
     
     # Information section
     st.markdown("---")
