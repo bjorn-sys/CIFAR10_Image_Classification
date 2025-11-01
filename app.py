@@ -103,16 +103,13 @@ def check_login(username, password):
     return username in valid_users and valid_users[username] == password
 
 # ==============================================================
-# CUSTOM CAMERA COMPONENT WITH BACK CAMERA SUPPORT
+# SIMPLIFIED CAMERA COMPONENT WITH BACK CAMERA SUPPORT
 # ==============================================================
 def camera_component_with_back_camera():
-    """Custom camera component that allows back camera selection"""
+    """Simplified camera component using Streamlit's built-in camera input"""
     
     st.markdown("""
     <style>
-    .camera-options {
-        margin-bottom: 10px;
-    }
     .camera-instructions {
         background-color: #f0f2f6;
         padding: 10px;
@@ -141,101 +138,119 @@ def camera_component_with_back_camera():
         </div>
         """, unsafe_allow_html=True)
     
-    # JavaScript to switch cameras
-    camera_constraints = {
-        "Front Camera": {"facingMode": "user"},
-        "Back Camera": {"facingMode": "environment"}
-    }
-    
-    # HTML and JavaScript for custom camera component
-    camera_html = f"""
-    <script>
-    let currentStream = null;
-    
-    async function setupCamera(facingMode) {{
-        if (currentStream) {{
-            currentStream.getTracks().forEach(track => track.stop());
-        }}
+    # Instructions for back camera (since Streamlit's camera_input only supports front camera)
+    if camera_mode == "Back Camera":
+        st.warning("""
+        **Back Camera Note:** Streamlit's built-in camera input currently only supports front camera. 
+        For back camera functionality, please:
+        1. Use your device's native camera app
+        2. Take a photo with the back camera
+        3. Upload the image using the 'Upload Image' option
+        """)
         
-        const constraints = {{
-            video: {{ 
-                facingMode: facingMode,
-                width: {{ ideal: 1280 }},
-                height: {{ ideal: 720 }}
-            }} 
-        }};
+        # Alternative: Allow file upload directly in camera mode
+        st.info("**Alternative:** Upload an image taken with your back camera:")
+        uploaded_file = st.file_uploader(
+            "Upload back camera photo", 
+            type=['jpg', 'jpeg', 'png'],
+            key="back_camera_upload"
+        )
         
-        try {{
-            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-            const video = document.getElementById('video');
-            video.srcObject = currentStream;
-        }} catch (err) {{
-            console.error("Error accessing camera:", err);
-            alert("Error accessing camera: " + err.message);
-        }}
-    }}
-    
-    function capturePhoto() {{
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const context = canvas.getContext('2d');
-        
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        const dataURL = canvas.toDataURL('image/jpeg');
-        document.getElementById('photoData').value = dataURL;
-        document.getElementById('captureForm').submit();
-    }}
-    
-    // Initialize with front camera
-    setupCamera('{camera_constraints[camera_mode]["facingMode"]}');
-    
-    // Update camera when selection changes
-    document.getElementById('cameraMode').addEventListener('change', function(e) {{
-        const facingMode = e.target.value === 'Back Camera' ? 'environment' : 'user';
-        setupCamera(facingMode);
-    }});
-    </script>
-    
-    <div style="text-align: center;">
-        <video id="video" autoplay playsinline style="width: 100%; max-width: 500px; border-radius: 10px; background: #000;"></video>
-        <canvas id="canvas" style="display: none;"></canvas>
-        
-        <div style="margin: 15px 0;">
-            <button onclick="capturePhoto()" style="
-                background: #ff4b4b;
-                color: white;
-                border: none;
-                padding: 12px 30px;
-                border-radius: 25px;
-                font-size: 16px;
-                cursor: pointer;
-                margin: 10px;
-            ">📸 Capture Image</button>
-        </div>
-    </div>
-    
-    <form id="captureForm">
-        <input type="hidden" id="photoData" name="photoData">
-        <input type="hidden" id="cameraMode" value="{camera_mode}">
-    </form>
-    """
-    
-    st.components.v1.html(camera_html, height=600)
-    
-    # Handle captured image
-    if st.session_state.get('photo_data'):
-        try:
-            # Decode base64 image
-            image_data = st.session_state.photo_data.split(',')[1]
-            image_bytes = base64.b64decode(image_data)
-            image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+        if uploaded_file is not None:
+            image = Image.open(uploaded_file).convert('RGB')
             return image
-        except Exception as e:
-            st.error(f"Error processing captured image: {e}")
-            return None
+        
+        return None
+    
+    else:
+        # Use Streamlit's built-in camera input for front camera
+        st.info("📸 **Front Camera Active** - Click the button below to take a photo")
+        img_file_buffer = st.camera_input(
+            "Take a picture with your front camera",
+            key="front_camera",
+            help="Position your camera to capture an object and take a picture"
+        )
+        
+        if img_file_buffer is not None:
+            # Convert to PIL Image
+            bytes_data = img_file_buffer.getvalue()
+            image = Image.open(io.BytesIO(bytes_data)).convert('RGB')
+            return image
+    
+    return None
+
+# ==============================================================
+# ALTERNATIVE: ADVANCED CAMERA COMPONENT (Compatible with all Streamlit versions)
+# ==============================================================
+def advanced_camera_component():
+    """Alternative camera component that works across all Streamlit versions"""
+    
+    st.markdown("### 📱 Camera Options")
+    
+    # Option selection
+    camera_option = st.radio(
+        "Choose camera method:",
+        ["Use Front Camera", "Upload Back Camera Photo", "Use Device Camera App"],
+        help="Select how you want to capture images"
+    )
+    
+    if camera_option == "Use Front Camera":
+        st.info("Using device front camera...")
+        img_file_buffer = st.camera_input(
+            "Take a photo with front camera",
+            key="simple_front_camera"
+        )
+        
+        if img_file_buffer is not None:
+            image = Image.open(io.BytesIO(img_file_buffer.getvalue())).convert('RGB')
+            return image
+    
+    elif camera_option == "Upload Back Camera Photo":
+        st.info("""
+        **Instructions:**
+        1. Open your device's camera app
+        2. Switch to back camera
+        3. Take a photo of your object
+        4. Upload it here
+        """)
+        
+        uploaded_file = st.file_uploader(
+            "Upload photo from back camera",
+            type=['jpg', 'jpeg', 'png', 'heic'],
+            key="back_camera_upload_alt"
+        )
+        
+        if uploaded_file is not None:
+            image = Image.open(uploaded_file).convert('RGB')
+            return image
+    
+    else:  # Use Device Camera App
+        st.info("""
+        **Recommended for Best Quality:**
+        1. Use your device's native camera app
+        2. Switch to back camera for better quality
+        3. Take a well-lit, clear photo
+        4. Upload the saved image
+        """)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Tips for better photos:**")
+            st.markdown("• Good lighting")
+            st.markdown("• Steady hands")
+            st.markdown("• Center the object")
+            st.markdown("• Clear background")
+        
+        with col2:
+            uploaded_file = st.file_uploader(
+                "Upload your photo",
+                type=['jpg', 'jpeg', 'png', 'heic', 'bmp'],
+                key="camera_app_upload"
+            )
+            
+            if uploaded_file is not None:
+                image = Image.open(uploaded_file).convert('RGB')
+                return image
     
     return None
 
@@ -254,13 +269,6 @@ def main():
         st.session_state.authenticated = False
     if 'username' not in st.session_state:
         st.session_state.username = ''
-    if 'photo_data' not in st.session_state:
-        st.session_state.photo_data = None
-    
-    # Handle form submission for captured images
-    if st.query_params.get('photoData'):
-        st.session_state.photo_data = st.query_params.get('photoData')
-        st.rerun()
     
     # Login section
     if not st.session_state.authenticated:
@@ -300,7 +308,6 @@ def main():
     if st.sidebar.button("Logout"):
         st.session_state.authenticated = False
         st.session_state.username = ''
-        st.session_state.photo_data = None
         st.rerun()
     
     st.title("🖼️ CIFAR-10 Image Classification")
@@ -353,12 +360,17 @@ def main():
     else:  # Camera Input
         st.header("📱 Camera Input")
         
-        # Clear previous captured image if switching modes
-        if st.session_state.photo_data:
-            st.session_state.photo_data = None
+        # Let user choose between simple and advanced camera options
+        camera_version = st.radio(
+            "Camera Interface:",
+            ["Simple Camera", "Advanced Camera Options"],
+            horizontal=True
+        )
         
-        # Use custom camera component
-        captured_image = camera_component_with_back_camera()
+        if camera_version == "Simple Camera":
+            captured_image = camera_component_with_back_camera()
+        else:
+            captured_image = advanced_camera_component()
         
         if captured_image is not None:
             # Display captured image
@@ -390,9 +402,10 @@ def main():
                 st.progress(float(prob) / 100)
             
             # Option to capture another image
-            if st.button("🔄 Capture Another Image"):
-                st.session_state.photo_data = None
-                st.rerun()
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("🔄 Capture Another Image", use_container_width=True):
+                    st.rerun()
     
     # Information section
     st.markdown("---")
