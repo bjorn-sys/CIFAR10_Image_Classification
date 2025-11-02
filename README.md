@@ -142,5 +142,7 @@ The CIFAR-10 dataset is a collection of 60,000 small color images, each 32x32 pi
 
 
 LINK:[ https://cifar10imageclassification-9.streamlit.app/](https://cifar10imageclassification-t.streamlit.app/)
+
 username : admin
+
 password : admin123
