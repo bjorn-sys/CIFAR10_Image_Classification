@@ -141,7 +141,7 @@ The CIFAR-10 dataset is a collection of 60,000 small color images, each 32x32 pi
 * Data Augmentation: Essential for improving model generalization
 
 
-LINK:[ https://cifar10imageclassification-9.streamlit.app/](https://cifar10imageclassification-t.streamlit.app/)
+LINK:http://100.24.121.192:8501/
 
 username : admin
 
